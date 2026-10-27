@@ -1,8 +1,8 @@
 # Firmware: BLE breadboard demo
 
-An ESP32 on a breadboard with one LED. When Claude Code finishes, the Mac sends
-`done` over Bluetooth LE and the LED strobes. When Claude needs your input, it
-sends `wait` and the LED breathes until you reply.
+An ESP32 on a breadboard with one LED. While Claude Code is working, the LED
+pulses in time with the Claude Code spinner. When Claude finishes, it stays lit.
+When Claude needs your input, it breathes.
 
 ```
 Claude Code hook → mac/notify.py → Bluetooth LE → ESP32 → LED
@@ -40,6 +40,9 @@ python3 -m venv ~/.star-notifier
 The first run makes macOS ask for Bluetooth access for your terminal app. Allow it,
 then run it again. The LED should strobe, and the Serial Monitor shows `Command: test`.
 
+Each command takes a second or two, because the script finds the board and
+connects fresh every time.
+
 ## 4. Hook it up to Claude Code
 
 Add this to `~/.claude/settings.json`, using the full path to `notify.py`:
@@ -54,15 +57,15 @@ Add this to `~/.claude/settings.json`, using the full path to `notify.py`:
       { "hooks": [{ "type": "command", "command": "~/.star-notifier/bin/python /path/to/Star-Notifier/firmware/mac/notify.py wait >/dev/null 2>&1 &" }] }
     ],
     "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "~/.star-notifier/bin/python /path/to/Star-Notifier/firmware/mac/notify.py off >/dev/null 2>&1 &" }] }
+      { "hooks": [{ "type": "command", "command": "~/.star-notifier/bin/python /path/to/Star-Notifier/firmware/mac/notify.py work >/dev/null 2>&1 &" }] }
     ]
   }
 }
 ```
 
-- `Stop` runs when Claude finishes a reply, so the LED strobes.
+- `UserPromptSubmit` runs when you send a message, so the LED starts the spinner pulse.
+- `Stop` runs when Claude finishes a reply, so the LED stays lit.
 - `Notification` runs when Claude is waiting on you, for example for a permission prompt, so the LED breathes.
-- `UserPromptSubmit` runs when you send a message, so the LED turns off.
 
 The `&` at the end runs each command in the background, so Claude never waits on Bluetooth.
 
@@ -70,7 +73,9 @@ The `&` at the end runs each command in the background, so Claude never waits on
 
 | Write | LED |
 |---|---|
-| `done` / `test` | 3 strobe bursts, then off |
+| `work` | steps up and down like the Claude Code spinner, about 1.2 s per cycle |
+| `done` | solid on until the next command |
+| `test` | 3 strobe bursts, then off |
 | `wait` | slow breathing until the next command |
 | `off` | off |
 

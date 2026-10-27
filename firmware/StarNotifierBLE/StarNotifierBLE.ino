@@ -3,10 +3,11 @@
 // The ESP32 advertises as "Star-Notifier". The Mac (firmware/mac/notify.py)
 // connects and writes a short command to one characteristic:
 //
-//   done  -> strobe burst (Claude finished)
+//   work  -> spinner pulse while Claude is working
+//   done  -> solid on (Claude finished), until the next command
 //   wait  -> slow breathing until the next command (Claude needs you)
 //   off   -> LED off
-//   test  -> same as done
+//   test  -> strobe burst
 //
 // Works with the ESP32 Arduino core 2.x and 3.x. Needs a chip with Bluetooth LE:
 // ESP32, C3, S3 or C6 (the S2 has no Bluetooth).
@@ -24,7 +25,7 @@ const char *DEVICE_NAME = "Star-Notifier";
 #define SERVICE_UUID "12dfac1e-0b86-4adf-8fc9-59cbe90f7db7"
 #define COMMAND_UUID "9887946c-c769-4e25-95b7-fc4080034d02"
 
-enum Mode { OFF, STROBE, BREATHE, BLINK_TWICE };
+enum Mode { OFF, ON, WORKING, STROBE, BREATHE, BLINK_TWICE };
 
 // Written from the BLE task, read in loop().
 volatile Mode pendingMode = OFF;
@@ -60,7 +61,9 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
     cmd.toLowerCase();
     Serial.printf("Command: %s\n", cmd.c_str());
 
-    if (cmd == "done" || cmd == "test") request(STROBE);
+    if (cmd == "work") request(WORKING);
+    else if (cmd == "done") request(ON);
+    else if (cmd == "test") request(STROBE);
     else if (cmd == "wait") request(BREATHE);
     else if (cmd == "off") request(OFF);
   }
@@ -103,6 +106,19 @@ void loop() {
     case OFF:
       setLed(0);
       break;
+
+    case ON:
+      setLed(255);
+      break;
+
+    case WORKING: {
+      // Mirrors the Claude Code spinner: 6 glyphs that grow, then shrink back,
+      // one frame about every 120 ms. Each glyph is one brightness step.
+      static const uint8_t levels[] = {10, 40, 90, 150, 210, 255, 210, 150, 90, 40};
+      const uint32_t frame = 120;
+      setLed(levels[(t / frame) % (sizeof(levels) / sizeof(levels[0]))]);
+      break;
+    }
 
     case STROBE: {
       // 3 bursts of 8 fast flashes, then off.

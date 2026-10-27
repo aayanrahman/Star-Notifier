@@ -1,8 +1,10 @@
 """Send a command to the Star Notifier over Bluetooth LE.
 
-    notify.py done   # strobe
+    notify.py work   # spinner pulse while Claude works
+    notify.py done   # solid on
     notify.py wait   # breathe until the next command
     notify.py off
+    notify.py test   # strobe
 
 Finds the board by its service UUID, connects, writes, and disconnects.
 Exits quietly with status 1 if the board isn't nearby, so a Claude Code hook
@@ -10,6 +12,7 @@ never gets stuck on it.
 """
 
 import asyncio
+import fcntl
 import sys
 
 from bleak import BleakClient, BleakScanner
@@ -36,4 +39,8 @@ async def send(command: str) -> bool:
 
 if __name__ == "__main__":
     command = sys.argv[1] if len(sys.argv) > 1 else "done"
-    sys.exit(0 if asyncio.run(send(command)) else 1)
+    # Hooks run in the background, so two can overlap. Take turns on the radio,
+    # so "work" and "done" never fight over the connection.
+    with open("/tmp/star-notifier.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        sys.exit(0 if asyncio.run(send(command)) else 1)
